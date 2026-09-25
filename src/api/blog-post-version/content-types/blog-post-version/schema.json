@@ -1,0 +1,28 @@
+{
+  "kind": "collectionType",
+  "collectionName": "blog_post_versions",
+  "info": {
+    "singularName": "blog-post-version",
+    "pluralName": "blog-post-versions",
+    "displayName": "Blog Post Version"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "blogPost": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::blog-post.blog-post"
+    },
+    "versionNumber": {
+      "type": "integer",
+      "required": true,
+      "min": 1
+    },
+    "snapshot": {
+      "type": "json",
+      "required": true
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "name": "wgb-strapi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Strapi CMS for the WeddingGiftBox blog",
+  "scripts": {
+    "build": "strapi build",
+    "console": "strapi console",
+    "deploy": "strapi deploy",
+    "dev": "strapi develop",
+    "develop": "strapi develop",
+    "start": "strapi start",
+    "strapi": "strapi",
+    "upgrade": "npx @strapi/upgrade latest",
+    "upgrade:dry": "npx @strapi/upgrade latest --dry"
+  },
+  "dependencies": {
+    "@_sh/strapi-plugin-ckeditor": "^7.1.1",
+    "@strapi-community/plugin-seo": "^2.1.1",
+    "@strapi/plugin-cloud": "5.43.0",
+    "@strapi/plugin-users-permissions": "5.43.0",
+    "@strapi/provider-upload-aws-s3": "^5.44.0",
+    "@strapi/strapi": "5.43.0",
+    "pg": "^8.20.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-router-dom": "^6.0.0",
+    "reading-time": "^1.5.0",
+    "striptags": "^3.2.0",
+    "styled-components": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0 <=24.x.x",
+    "npm": ">=6.0.0"
+  },
+  "strapi": {
+    "uuid": "ee8d4f3a-6c21-4a5e-9f0b-2d7c8a1b3e64"
+  }
+}

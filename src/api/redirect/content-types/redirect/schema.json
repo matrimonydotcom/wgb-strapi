@@ -1,0 +1,41 @@
+{
+  "kind": "collectionType",
+  "collectionName": "redirects",
+  "info": {
+    "singularName": "redirect",
+    "pluralName": "redirects",
+    "displayName": "Redirect",
+    "description": "URL redirects served to the storefront's Next.js middleware via wgb-backend's GET /api/v1/blog/redirects"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "fromPath": {
+      "type": "string",
+      "required": true,
+      "unique": true,
+      "regex": "^/.*"
+    },
+    "toPath": {
+      "type": "string",
+      "required": true,
+      "regex": "^(/|https?://).+"
+    },
+    "statusCode": {
+      "type": "enumeration",
+      "enum": ["HTTP_301", "HTTP_302"],
+      "default": "HTTP_301",
+      "required": true
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "required": true
+    },
+    "note": {
+      "type": "text"
+    }
+  }
+}

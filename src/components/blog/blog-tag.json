@@ -1,0 +1,21 @@
+{
+  "collectionName": "components_blog_blog_tags",
+  "info": {
+    "displayName": "Blog Tag",
+    "description": "PLACEHOLDER TAXONOMY — these six values were carried over verbatim from the shared weddingservices CMS and are Mandap's, not WeddingGiftBox's. Replace the enum with the real WGB tag list before any content is authored; changing an enum after entries reference it means a data migration."
+  },
+  "attributes": {
+    "value": {
+      "type": "enumeration",
+      "enum": [
+        "Venues",
+        "Mandap Decor",
+        "Bridal Fashion",
+        "Groom Fashion",
+        "Wedding Inspiration",
+        "Trends"
+      ],
+      "required": true
+    }
+  }
+}

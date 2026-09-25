@@ -1,0 +1,43 @@
+# Local dependency only — Strapi itself runs on the host via `npm run develop`.
+#
+# The host port is deliberately not the default. 5432 is held by the
+# weddingservices estate and 5433 by `wgb-backend` (see its own
+# docker/docker-compose.yml, which makes the same argument): a new joiner should
+# not have to stop either stack to bring this one up.
+#
+#   docker compose -f docker/docker-compose.yml up -d
+#
+# Then in .env:
+#   DATABASE_HOST=127.0.0.1
+#   DATABASE_PORT=5434
+#   DATABASE_NAME=wgb_strapi
+#   DATABASE_USERNAME=wgb
+#   DATABASE_PASSWORD=wgb
+#   DATABASE_SCHEMA=public
+#   DATABASE_SSL=false
+#
+# The project name is pinned. Compose otherwise names the project after the
+# directory holding this file — `docker` — and `wgb-backend` keeps its compose
+# file in a directory of the same name, so the two stacks would fight over one
+# project, one network and one set of volume names.
+name: wgb-strapi
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - '5434:5432'
+    environment:
+      POSTGRES_USER: wgb
+      POSTGRES_PASSWORD: wgb
+      POSTGRES_DB: wgb_strapi
+    volumes:
+      - wgb_strapi_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U wgb -d wgb_strapi']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  wgb_strapi_postgres_data:
