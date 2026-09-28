@@ -1,0 +1,164 @@
+# Deploy wgb-strapi to dev ECS.
+#
+# Flow: checkout -> build+push image -> render task definition -> deploy ->
+# wait for stability. Mirrors wgb-backend/.github/workflows/deploy-dev.yml
+# step for step, because both services live on the same cluster in the same
+# account and there is no reason for them to drift.
+#
+# TWO-PLANE OWNERSHIP MODEL: this repo (the APP plane) owns the task
+# definition — ecs/taskdef.dev.json holds env values and secret REFERENCES
+# (valueFrom only, never values). This workflow resolves ${ACCOUNT_ID} and
+# ${SECRET_ARN} with envsubst, injects the freshly-built image, and registers
+# a new revision. Platform Terraform (platform-engineering) owns the ECS
+# service and cluster shell, the empty Secrets Manager container, the ALB
+# listener rule and the IAM roles. Secret VALUES are set out-of-band with
+# `aws secretsmanager put-secret-value` — never by this workflow.
+#
+# NO MIGRATION STEP, unlike wgb-backend. Strapi applies its own schema changes
+# at boot from the content-type JSON in src/api and src/components, and runs
+# anything in database/migrations itself. A separate migrate task would race
+# the service for the same DDL.
+#
+# Prerequisites — NONE of these exist yet. See docs/DEPLOYMENT.md, which lists
+# them with the reason each is needed and what is still unanswered:
+#   AWS:    ECR repo dev-wgb-strapi; ECS service dev-wgb-strapi on cluster
+#           dev-wgb; IAM roles dev-wgb-strapi-ecs-exec-role /
+#           -ecs-task-role; Secrets Manager secret wgb-dev-wgb-strapi-secrets;
+#           GitHub OIDC role dev-wgb-strapi-github-actions-role; an ALB
+#           listener rule and hostname; an S3 bucket for uploads.
+#   GitHub: repository variable AWS_ACCOUNT_ID (the nonprod account id — not a
+#           secret, matching wgb-backend).
+#
+# Until they exist this workflow fails at the first AWS call, which is the
+# intended behaviour: it is committed so the app side is reviewable now, not
+# so it can run today.
+
+name: Deploy to Dev
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'config/**'
+      - 'database/**'
+      - 'public/**'
+      - 'docker/Dockerfile'
+      - 'ecs/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '!**.md'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-dev-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1
+  AWS_ROLE_NAME: dev-wgb-strapi-github-actions-role
+  ECR_REPO: dev-wgb-strapi
+  ECS_CLUSTER: dev-wgb
+  ECS_SERVICE: dev-wgb-strapi
+  CONTAINER_NAME: wgb-strapi
+  SECRET_ID: wgb-dev-wgb-strapi-secrets
+
+jobs:
+  deploy:
+    name: Build and deploy to dev
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image tag
+        id: tag
+        run: echo "image_tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS credentials (dev)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/${{ env.AWS_ROLE_NAME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          # `provenance: false`, matching wgb-backend. With provenance on,
+          # buildx pushes a manifest list plus separate attestation manifests
+          # rather than one image — which the aws-actions render/deploy steps
+          # and ECR's immutable-tag setting both handle less predictably. The
+          # org already pins this off; no reason for this repo to differ.
+          provenance: false
+          tags: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPO }}:${{ steps.tag.outputs.image_tag }}
+          build-args: |
+            BUILD_VERSION=${{ steps.tag.outputs.image_tag }}
+            GIT_COMMIT=${{ steps.tag.outputs.image_tag }}
+
+      - name: Render task definition
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          SECRET_ARN=$(aws secretsmanager describe-secret --secret-id "${{ env.SECRET_ID }}" --region "${{ env.AWS_REGION }}" --query ARN --output text)
+          export ACCOUNT_ID SECRET_ARN
+          envsubst '${ACCOUNT_ID} ${SECRET_ARN}' < ecs/taskdef.dev.json > taskdef.rendered.json
+
+      # A placeholder that reached a running task would be a confusing failure
+      # much later — a CMS that boots and then cannot resolve its database, or
+      # serves image URLs pointing at the literal string. Fail here instead.
+      - name: Refuse to deploy unresolved placeholders
+        run: |
+          set -euo pipefail
+          if grep -q 'REPLACE_ME__' taskdef.rendered.json; then
+            echo "::error::ecs/taskdef.dev.json still contains REPLACE_ME__ placeholders:"
+            grep -o 'REPLACE_ME__[a-z_]*' taskdef.rendered.json | sort -u
+            exit 1
+          fi
+
+      - name: Render image into task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: taskdef.rendered.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPO }}:${{ steps.tag.outputs.image_tag }}
+
+      - name: Deploy to dev ECS
+        # `aws ecs wait services-stable` rather than the deploy action's own
+        # wait-for-service-stability, for the reason wgb-backend's workflow
+        # documents: the action's SDK-internal backoff can sit idle for minutes
+        # after ECS has already reported the deployment stable.
+        run: |
+          set -euo pipefail
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "file://${{ steps.task-def.outputs.task-definition }}" \
+            --region "${{ env.AWS_REGION }}" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          aws ecs update-service \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --service "${{ env.ECS_SERVICE }}" \
+            --task-definition "$TASK_DEF_ARN" \
+            --region "${{ env.AWS_REGION }}" > /dev/null
+          aws ecs wait services-stable \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services "${{ env.ECS_SERVICE }}" \
+            --region "${{ env.AWS_REGION }}"
+
+      - name: Show deploy info
+        run: |
+          echo "image tag : ${{ steps.tag.outputs.image_tag }}"
+          echo "cluster   : ${{ env.ECS_CLUSTER }}"
+          echo "service   : ${{ env.ECS_SERVICE }}"
