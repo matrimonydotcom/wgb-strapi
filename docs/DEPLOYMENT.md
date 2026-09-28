@@ -61,8 +61,8 @@ Named to match `wgb-backend`, which shares the cluster:
 | GitHub OIDC role | `dev-wgb-strapi-github-actions-role` |
 | Secrets Manager secret | `wgb-dev-wgb-strapi-secrets` |
 | CloudWatch log group | `/ecs/dev-wgb-strapi` |
-| ALB listener rule + hostname | see open question 1 |
-| S3 bucket for uploads | see open question 2 |
+| ALB listener rule + hostname | `dev-blogs.weddinggiftbox.com` (decided — Jira requirement) |
+| S3 bucket for uploads | shared `img-weddingbazaar-com` (same bucket `wgb-backend` writes to; `wgb-strapi/uploads/` prefix) |
 | GitHub repository variable | `AWS_ACCOUNT_ID` (nonprod account id, not a secret) |
 
 The task role needs `s3:PutObject`/`GetObject`/`DeleteObject` on the uploads
@@ -104,8 +104,10 @@ mint its tokens.
 
 1. Platform creates the resources above.
 2. Seed the eight secret values.
-3. Fill the seven `REPLACE_ME__` placeholders in `ecs/taskdef.dev.json`. The
-   workflow refuses to deploy while any remain.
+3. All `REPLACE_ME__` placeholders in `ecs/taskdef.dev.json` are now filled in
+   (hostname, storefront origin, RDS endpoint, uploads bucket/CDN — see Open
+   Questions below) — nothing left for the workflow's placeholder guard to
+   catch on the dev side.
 4. Merge to `main`. Strapi boots and creates its own schema from the
    content-type JSON in `src/`.
 5. Create the first admin user at `https://<hostname>/admin`.
@@ -115,47 +117,45 @@ mint its tokens.
 
 ## Open questions
 
-These block the deploy, not the code:
-
-1. **The admin hostname** (e.g. `dev-wgb-blogs.weddinggiftbox.com`) — it goes
-   into `PUBLIC_URL`, the CORS list, the CSP `frame-ancestors` list, the preview
-   handler and the ALB listener rule.
-2. **The uploads bucket and its CDN host.** `dev-wgb` exists as a bucket; is
-   there a CloudFront/Akamai host in front? That host must also be added to
-   `wedding-gift-box`'s `next.config.ts` `remotePatterns`, or every cover image
-   and avatar 400s.
-3. **Super-admin email(s)** for the first admin user.
-4. **The database — decided, but DevOps has two things to create.** The dev
-   RDS already exists and already serves `wgb-backend`: instance
-   `wgb-postgres`, database `weddinggiftbox`, master user `wgbadmin`
+1. ~~**The admin hostname**~~ — decided: `dev-blogs.weddinggiftbox.com`
+   (`blogs.weddinggiftbox.com` in prod), straight from the Jira requirement.
+   Filled into `PUBLIC_URL` and the ALB listener rule (platform-engineering).
+2. ~~**The uploads bucket and its CDN host.**~~ — decided: the shared
+   `img-weddingbazaar-com` bucket / `img.weddingbazaar.com` CDN host — the
+   same one `wgb-backend` already writes to and the same host
+   `wedding-gift-box`'s `next.config.ts` `remotePatterns` already allows, under
+   a dedicated `wgb-strapi/uploads/` prefix so object keys don't collide with
+   `wgb-backend`'s.
+3. **Super-admin email(s)** for the first admin user — still open.
+4. **The database — decided, and now half-built.** The dev RDS already exists
+   and already serves `wgb-backend`: instance `wgb-postgres`, database
+   `weddinggiftbox`, master user `wgbadmin`
    (`environments/dev-wgb/terraform.tfvars`). Strapi reuses the same instance
-   and the same database, but needs:
-
-   - **its own schema**, `strapi`, not the backend's `weddinggiftbox` schema.
-     There are no table-name collisions — the backend prefixes everything
-     `wgb_`/`mmw_` — but 51 Strapi tables do not belong mixed in with it.
-     **Strapi will not create the schema**, only tables inside one, so it must
-     exist before first boot.
-   - **its own role**, `strapi`, not `wgbadmin`. Strapi needs CREATE/ALTER/DROP
-     and the master user holds those over the backend's schema too. Its
-     password goes into `wgb-dev-wgb-strapi-secrets` as `DATABASE_PASSWORD`,
-     which also sidesteps the `manage_master_user_password = true` problem
-     entirely — no master password has to leave its AWS-managed secret.
+   and the same database, with its own schema and its own role exactly as
+   below — this SQL still needs to be (re-)run:
 
    ```sql
    CREATE ROLE strapi LOGIN PASSWORD '<generated>';
    CREATE SCHEMA strapi AUTHORIZATION strapi;
    ```
 
-   Only `DATABASE_HOST` is still unknown — the instance endpoint, which is the
-   `rds_info.address` Terraform output.
+   **Status:** the `strapi` schema was bootstrapped once already, but granted
+   to `wgbadmin` rather than a dedicated role — before this design was known.
+   That needs redoing: reassign the schema to a freshly-created `strapi` role
+   (`ALTER SCHEMA strapi OWNER TO strapi` after creating the role, or drop and
+   recreate — no tables exist yet) and put that role's password into
+   `wgb-dev-wgb-strapi-secrets` as `DATABASE_PASSWORD` instead of the RDS
+   master password. Not done by Terraform or the workflow — bastion + `psql`,
+   same as the original bootstrap.
+
+   `DATABASE_HOST` is now filled in:
+   `wgb-postgres.ctvheqmsdec6.ap-south-1.rds.amazonaws.com`.
 
    Worth raising: the instance is **`db.t4g.micro`** — 2 burstable vCPU, 1 GiB
    RAM — and would then carry both services. Probably fine for dev; Strapi does
    a burst of DDL introspection on every boot, so it is the first thing to look
    at if deploys get slow.
-5. **Storefront origin** for `NEXTJS_WGB_ORIGIN` — presumably
-   `https://dev-wgb-app.weddinggiftbox.com`, worth confirming.
+5. ~~**Storefront origin**~~ — confirmed: `https://dev-wgb-app.weddinggiftbox.com`.
 
 ## Known characteristics, recorded rather than fixed
 

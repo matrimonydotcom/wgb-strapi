@@ -4,8 +4,8 @@
   "requiresCompatibilities": [
     "FARGATE"
   ],
-  "cpu": "512",
-  "memory": "1024",
+  "cpu": "1024",
+  "memory": "2048",
   "executionRoleArn": "arn:aws:iam::${ACCOUNT_ID}:role/prod-wgb-strapi-ecs-exec-role",
   "taskRoleArn": "arn:aws:iam::${ACCOUNT_ID}:role/prod-wgb-strapi-ecs-task-role",
   "containerDefinitions": [
@@ -49,129 +49,49 @@
       ],
       "essential": true,
       "environment": [
-        {
-          "name": "NODE_ENV",
-          "value": "production"
-        },
-        {
-          "name": "HOST",
-          "value": "0.0.0.0"
-        },
-        {
-          "name": "PORT",
-          "value": "1337"
-        },
-        {
-          "name": "ADMIN_PATH",
-          "value": "/admin"
-        },
-        {
-          "name": "STRAPI_TELEMETRY_DISABLED",
-          "value": "true"
-        },
-        {
-          "name": "STRAPI_DISABLE_UPDATE_NOTIFICATION",
-          "value": "true"
-        },
-        {
-          "name": "PUBLIC_URL",
-          "value": "https://blogs.weddinggiftbox.com"
-        },
-        {
-          "name": "NEXTJS_WGB_ORIGIN",
-          "value": "https://www.weddinggiftbox.com"
-        },
-        {
-          "name": "AWS_REGION",
-          "value": "ap-south-1"
-        },
-        {
-          "name": "AWS_BUCKET",
-          "value": "img-weddingbazaar-com"
-        },
-        {
-          "name": "AWS_CDN_URL",
-          "value": "https://img.weddingbazaar.com"
-        },
-        {
-          "name": "AWS_UPLOAD_PATH",
-          "value": "wgb-strapi/uploads/"
-        },
-        {
-          "name": "OTEL_EXPORTER_OTLP_ENDPOINT",
-          "value": "http://localhost:4317"
-        }
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "HOST", "value": "0.0.0.0" },
+        { "name": "PORT", "value": "1337" },
+
+        { "name": "PUBLIC_URL", "value": "https://blogs.weddinggiftbox.com" },
+        { "name": "ADMIN_PATH", "value": "/admin" },
+        { "name": "NEXTJS_WGB_ORIGIN", "value": "https://www.weddinggiftbox.com" },
+
+        { "name": "STRAPI_TELEMETRY_DISABLED", "value": "true" },
+
+        { "name": "DATABASE_CLIENT", "value": "postgres" },
+        { "name": "DATABASE_HOST", "value": "REPLACE_ME__rds_endpoint" },
+        { "name": "DATABASE_PORT", "value": "5432" },
+        { "name": "DATABASE_NAME", "value": "weddinggiftbox" },
+        { "name": "DATABASE_USERNAME", "value": "strapi" },
+        { "name": "DATABASE_SCHEMA", "value": "strapi" },
+        { "name": "DATABASE_SSL", "value": "true" },
+        { "name": "DATABASE_SSL_REJECT_UNAUTHORIZED", "value": "false" },
+
+        { "name": "AWS_REGION", "value": "ap-south-1" },
+        { "name": "AWS_BUCKET", "value": "img-weddingbazaar-com" },
+        { "name": "AWS_CDN_URL", "value": "https://img.weddingbazaar.com" },
+        { "name": "AWS_UPLOAD_PATH", "value": "wgb-strapi/uploads/" },
+
+        { "name": "OTEL_EXPORTER_OTLP_ENDPOINT", "value": "http://localhost:4317" }
+      ],
+      "secrets": [
+        { "name": "DATABASE_PASSWORD", "valueFrom": "${SECRET_ARN}:DATABASE_PASSWORD::" },
+        { "name": "APP_KEYS", "valueFrom": "${SECRET_ARN}:APP_KEYS::" },
+        { "name": "API_TOKEN_SALT", "valueFrom": "${SECRET_ARN}:API_TOKEN_SALT::" },
+        { "name": "ADMIN_JWT_SECRET", "valueFrom": "${SECRET_ARN}:ADMIN_JWT_SECRET::" },
+        { "name": "TRANSFER_TOKEN_SALT", "valueFrom": "${SECRET_ARN}:TRANSFER_TOKEN_SALT::" },
+        { "name": "JWT_SECRET", "valueFrom": "${SECRET_ARN}:JWT_SECRET::" },
+        { "name": "ENCRYPTION_KEY", "valueFrom": "${SECRET_ARN}:ENCRYPTION_KEY::" },
+        { "name": "PREVIEW_SECRET", "valueFrom": "${SECRET_ARN}:PREVIEW_SECRET::" }
       ],
       "mountPoints": [],
       "volumesFrom": [],
-      "secrets": [
-        {
-          "name": "DATABASE_HOST",
-          "valueFrom": "${SECRET_ARN}:DATABASE_HOST::"
-        },
-        {
-          "name": "DATABASE_PORT",
-          "valueFrom": "${SECRET_ARN}:DATABASE_PORT::"
-        },
-        {
-          "name": "DATABASE_NAME",
-          "valueFrom": "${SECRET_ARN}:DATABASE_NAME::"
-        },
-        {
-          "name": "DATABASE_USERNAME",
-          "valueFrom": "${SECRET_ARN}:DATABASE_USERNAME::"
-        },
-        {
-          "name": "DATABASE_PASSWORD",
-          "valueFrom": "${SECRET_ARN}:DATABASE_PASSWORD::"
-        },
-        {
-          "name": "DATABASE_SCHEMA",
-          "valueFrom": "${SECRET_ARN}:DATABASE_SCHEMA::"
-        },
-        {
-          "name": "APP_KEYS",
-          "valueFrom": "${SECRET_ARN}:APP_KEYS::"
-        },
-        {
-          "name": "API_TOKEN_SALT",
-          "valueFrom": "${SECRET_ARN}:API_TOKEN_SALT::"
-        },
-        {
-          "name": "ADMIN_JWT_SECRET",
-          "valueFrom": "${SECRET_ARN}:ADMIN_JWT_SECRET::"
-        },
-        {
-          "name": "TRANSFER_TOKEN_SALT",
-          "valueFrom": "${SECRET_ARN}:TRANSFER_TOKEN_SALT::"
-        },
-        {
-          "name": "JWT_SECRET",
-          "valueFrom": "${SECRET_ARN}:JWT_SECRET::"
-        },
-        {
-          "name": "PREVIEW_SECRET",
-          "valueFrom": "${SECRET_ARN}:PREVIEW_SECRET::"
-        },
-        {
-          "name": "AWS_ACCESS_KEY_ID",
-          "valueFrom": "${SECRET_ARN}:AWS_ACCESS_KEY_ID::"
-        },
-        {
-          "name": "AWS_SECRET_ACCESS_KEY",
-          "valueFrom": "${SECRET_ARN}:AWS_SECRET_ACCESS_KEY::"
-        }
-      ],
       "dependsOn": [
-        {
-          "containerName": "log_router",
-          "condition": "START"
-        },
-        {
-          "containerName": "otel-collector",
-          "condition": "START"
-        }
+        { "containerName": "log_router", "condition": "START" },
+        { "containerName": "otel-collector", "condition": "START" }
       ],
+      "systemControls": [],
       "logConfiguration": {
         "logDriver": "awsfirelens",
         "options": {
@@ -181,8 +101,7 @@
           "Port": "3100",
           "labels": "job=wgb-strapi, product=weddinggiftbox, environment=prod, service=wgb-strapi"
         }
-      },
-      "systemControls": []
+      }
     },
     {
       "name": "otel-collector",
@@ -190,26 +109,12 @@
       "cpu": 64,
       "memoryReservation": 128,
       "portMappings": [
-        {
-          "containerPort": 4317,
-          "hostPort": 4317,
-          "protocol": "tcp"
-        },
-        {
-          "containerPort": 4318,
-          "hostPort": 4318,
-          "protocol": "tcp"
-        },
-        {
-          "containerPort": 13133,
-          "hostPort": 13133,
-          "protocol": "tcp"
-        }
+        { "containerPort": 4317, "hostPort": 4317, "protocol": "tcp" },
+        { "containerPort": 4318, "hostPort": 4318, "protocol": "tcp" },
+        { "containerPort": 13133, "hostPort": 13133, "protocol": "tcp" }
       ],
       "essential": false,
-      "command": [
-        "--config=env:AOT_CONFIG_CONTENT"
-      ],
+      "command": ["--config=env:AOT_CONFIG_CONTENT"],
       "environment": [
         {
           "name": "AOT_CONFIG_CONTENT",

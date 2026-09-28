@@ -7,10 +7,18 @@
 # ideally picking the exact image tag deploy-dev.yml's summary already
 # validated in dev.
 #
-# TWO-PLANE OWNERSHIP MODEL (same as wgb-backend/wgb-crm). This repo (the APP
-# plane) owns the task definition — ecs/taskdef.prod.json. Platform Terraform
-# (platform-engineering: prod/prod-wgb) owns the ECS service/cluster shell
-# and IAM roles.
+# TWO-PLANE OWNERSHIP MODEL (same as wgb-backend/wgb-crm, and as
+# ecs/taskdef.dev.json/deploy-dev.yml already document — see docs/
+# DEPLOYMENT.md for the full prerequisite list and the first-deploy runbook).
+# This repo (the APP plane) owns the task definition — ecs/taskdef.prod.json.
+# Platform Terraform (platform-engineering: prod/prod-wgb) owns the ECS
+# service/cluster shell, the empty Secrets Manager container, and IAM roles.
+#
+# Mirrors taskdef.dev.json's shape: a dedicated `strapi` Postgres role (never
+# the RDS master user), DATABASE_* values plaintext except DATABASE_PASSWORD,
+# and an otel-collector sidecar. Strapi itself emits no OTLP, but ECS-level
+# container CPU/memory metrics (awsecscontainermetrics) are wanted for this
+# service regardless — same reasoning added to taskdef.dev.json.
 #
 # Prerequisites (GitHub repo settings):
 #   Environment "production":
@@ -112,6 +120,20 @@ jobs:
           SECRET_ARN=$(aws secretsmanager describe-secret --secret-id "${{ env.SECRET_ID }}" --region "${{ env.AWS_REGION }}" --query ARN --output text)
           export ACCOUNT_ID SECRET_ARN
           envsubst '${ACCOUNT_ID} ${SECRET_ARN}' < ecs/taskdef.prod.json > taskdef.rendered.json
+
+      # Same guard as deploy-dev.yml: a placeholder that reached a running
+      # task would be a confusing failure much later — a CMS that boots and
+      # then cannot resolve its database, or serves image URLs pointing at
+      # the literal string. Fail here instead.
+      - name: Refuse to deploy unresolved placeholders
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if grep -q 'REPLACE_ME__' taskdef.rendered.json; then
+            echo "::error::ecs/taskdef.prod.json still contains REPLACE_ME__ placeholders:"
+            grep -o 'REPLACE_ME__[a-z_]*' taskdef.rendered.json | sort -u
+            exit 1
+          fi
 
       - name: Render image into task definition
         if: ${{ !inputs.dry_run }}
