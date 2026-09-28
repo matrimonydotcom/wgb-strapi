@@ -1,0 +1,192 @@
+# Deploy wgb-strapi to prod ECS.
+#
+# Manually triggered via workflow_dispatch — picks an arbitrary ref (commit
+# SHA, branch, or tag), same as wgb-backend's and wgb-crm's deploy-prod.yml.
+# This is the "prod pipeline triggers from the workflow" requirement: prod
+# never deploys on push, only ever via a deliberate Run workflow click here,
+# ideally picking the exact image tag deploy-dev.yml's summary already
+# validated in dev.
+#
+# TWO-PLANE OWNERSHIP MODEL (same as wgb-backend/wgb-crm, and as
+# ecs/taskdef.dev.json/deploy-dev.yml already document — see docs/
+# DEPLOYMENT.md for the full prerequisite list and the first-deploy runbook).
+# This repo (the APP plane) owns the task definition — ecs/taskdef.prod.json.
+# Platform Terraform (platform-engineering: prod/prod-wgb) owns the ECS
+# service/cluster shell, the empty Secrets Manager container, and IAM roles.
+#
+# Mirrors taskdef.dev.json's shape: a dedicated `strapi` Postgres role (never
+# the RDS master user), DATABASE_* values plaintext except DATABASE_PASSWORD,
+# and an otel-collector sidecar. Strapi itself emits no OTLP, but ECS-level
+# container CPU/memory metrics (awsecscontainermetrics) are wanted for this
+# service regardless — same reasoning added to taskdef.dev.json.
+#
+# Prerequisites (GitHub repo settings):
+#   Environment "production":
+#     Variable: AWS_ACCOUNT_ID_PROD (the prod AWS account)
+#     Deployment branch policy: restrict to main if desired.
+#
+# The deploy role (prod-wgb-strapi-github-actions-role) and its trust policy
+# are managed in platform-engineering: prod/prod-wgb/github-oidc.tf, driven
+# by wgb_github_oidc_configs in terraform.tfvars (github_sub_pattern =
+# environment:production, matching wgb-backend/wgb-crm's prod roles — GitHub's
+# OIDC token for a job with `environment: production` set always sends the
+# environment:<name> subject form, never the ref/branch form).
+
+name: Deploy to Prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to deploy (commit SHA, branch, or tag)"
+        required: true
+        type: string
+      dry_run:
+        description: "Dry run — build and push image but skip ECS deployment"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1
+  AWS_ROLE_NAME: prod-wgb-strapi-github-actions-role
+  ECR_REPO: prod-wgb-strapi
+  ECS_CLUSTER: prod-wgb
+  ECS_SERVICE: prod-wgb-strapi
+  CONTAINER_NAME: wgb-strapi
+  SECRET_ID: wgb-prod-wgb-strapi-secrets
+
+jobs:
+  build-and-deploy-prod:
+    name: Build & Deploy to Prod ECS
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout code at specified ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Compute image tag
+        id: tag
+        run: echo "image_tag=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Show deploy info
+        run: |
+          echo "## Prod Deploy — wgb-strapi" >> $GITHUB_STEP_SUMMARY
+          echo "- **Ref:** \`${{ inputs.ref }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** \`$(git rev-parse HEAD)\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dry run:** ${{ inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS credentials (prod)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID_PROD }}:role/${{ env.AWS_ROLE_NAME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image (prod)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          provenance: false
+          tags: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPO }}:${{ steps.tag.outputs.image_tag }}
+          build-args: |
+            BUILD_VERSION=${{ steps.tag.outputs.image_tag }}
+            GIT_COMMIT=${{ steps.tag.outputs.image_tag }}
+
+      - name: Render task definition
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          SECRET_ARN=$(aws secretsmanager describe-secret --secret-id "${{ env.SECRET_ID }}" --region "${{ env.AWS_REGION }}" --query ARN --output text)
+          export ACCOUNT_ID SECRET_ARN
+          envsubst '${ACCOUNT_ID} ${SECRET_ARN}' < ecs/taskdef.prod.json > taskdef.rendered.json
+
+      # Same guard as deploy-dev.yml: a placeholder that reached a running
+      # task would be a confusing failure much later — a CMS that boots and
+      # then cannot resolve its database, or serves image URLs pointing at
+      # the literal string. Fail here instead.
+      - name: Refuse to deploy unresolved placeholders
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if grep -q 'REPLACE_ME__' taskdef.rendered.json; then
+            echo "::error::ecs/taskdef.prod.json still contains REPLACE_ME__ placeholders:"
+            grep -o 'REPLACE_ME__[a-z_]*' taskdef.rendered.json | sort -u
+            exit 1
+          fi
+
+      - name: Render image into task definition
+        if: ${{ !inputs.dry_run }}
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: taskdef.rendered.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPO }}:${{ steps.tag.outputs.image_tag }}
+
+      - name: Deploy to prod ECS
+        if: ${{ !inputs.dry_run }}
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Mark prod deployment (Release + production branch)
+        if: ${{ !inputs.dry_run }}
+        env:
+          DEPLOY_SHA: ${{ steps.tag.outputs.image_tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%Y-%m-%d)
+          TIME=$(date -u +%H%M)
+          TAG="prod/${DATE}-${TIME}-${DEPLOY_SHA}"
+          RELEASE_NAME="Prod ${DATE} ${TIME} UTC"
+
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+          git tag -a "$TAG" -m "Production deployment at ${DATE} ${TIME} UTC by ${{ github.actor }}"
+          git push origin "$TAG"
+
+          git push origin "HEAD:refs/heads/production" --force
+
+          gh release create "$TAG" \
+            --title "$RELEASE_NAME" \
+            --notes "**Deployed commit:** \`$(git rev-parse HEAD)\`
+          **Triggered by:** ${{ github.actor }}
+          **Source ref:** \`${{ inputs.ref }}\`" \
+            --target "$(git rev-parse HEAD)" \
+            --latest
+
+          echo "## Prod Marked" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag:** \`$TAG\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **\`production\` branch** → \`${DEPLOY_SHA}\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Dry run complete
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "## Dry Run Complete" >> $GITHUB_STEP_SUMMARY
+          echo "Image built and pushed to prod ECR. ECS deployment skipped." >> $GITHUB_STEP_SUMMARY

@@ -53,14 +53,14 @@
         { "name": "HOST", "value": "0.0.0.0" },
         { "name": "PORT", "value": "1337" },
 
-        { "name": "PUBLIC_URL", "value": "REPLACE_ME__strapi_public_url" },
+        { "name": "PUBLIC_URL", "value": "https://dev-blogs.weddinggiftbox.com" },
         { "name": "ADMIN_PATH", "value": "/admin" },
-        { "name": "NEXTJS_WGB_ORIGIN", "value": "REPLACE_ME__storefront_origin" },
+        { "name": "NEXTJS_WGB_ORIGIN", "value": "https://dev-wgb-app.weddinggiftbox.com" },
 
         { "name": "STRAPI_TELEMETRY_DISABLED", "value": "true" },
 
         { "name": "DATABASE_CLIENT", "value": "postgres" },
-        { "name": "DATABASE_HOST", "value": "REPLACE_ME__rds_endpoint" },
+        { "name": "DATABASE_HOST", "value": "wgb-postgres.ctvheqmsdec6.ap-south-1.rds.amazonaws.com" },
         { "name": "DATABASE_PORT", "value": "5432" },
         { "name": "DATABASE_NAME", "value": "weddinggiftbox" },
         { "name": "DATABASE_USERNAME", "value": "strapi" },
@@ -69,9 +69,11 @@
         { "name": "DATABASE_SSL_REJECT_UNAUTHORIZED", "value": "false" },
 
         { "name": "AWS_REGION", "value": "ap-south-1" },
-        { "name": "AWS_BUCKET", "value": "REPLACE_ME__uploads_bucket" },
-        { "name": "AWS_CDN_URL", "value": "REPLACE_ME__uploads_cdn_url" },
-        { "name": "AWS_UPLOAD_PATH", "value": "" }
+        { "name": "AWS_BUCKET", "value": "img-weddingbazaar-com" },
+        { "name": "AWS_CDN_URL", "value": "https://img.weddingbazaar.com" },
+        { "name": "AWS_UPLOAD_PATH", "value": "wgb-strapi/uploads/" },
+
+        { "name": "OTEL_EXPORTER_OTLP_ENDPOINT", "value": "http://localhost:4317" }
       ],
       "secrets": [
         { "name": "DATABASE_PASSWORD", "valueFrom": "${SECRET_ARN}:DATABASE_PASSWORD::" },
@@ -85,6 +87,10 @@
       ],
       "mountPoints": [],
       "volumesFrom": [],
+      "dependsOn": [
+        { "containerName": "log_router", "condition": "START" },
+        { "containerName": "otel-collector", "condition": "START" }
+      ],
       "systemControls": [],
       "logConfiguration": {
         "logDriver": "awsfirelens",
@@ -96,6 +102,36 @@
           "labels": "job=wgb-strapi, product=weddinggiftbox, environment=dev, service=wgb-strapi"
         }
       }
+    },
+    {
+      "name": "otel-collector",
+      "image": "${ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/dev-otel-collector:adot-0.40.0",
+      "cpu": 64,
+      "memoryReservation": 128,
+      "portMappings": [
+        { "containerPort": 4317, "hostPort": 4317, "protocol": "tcp" },
+        { "containerPort": 4318, "hostPort": 4318, "protocol": "tcp" },
+        { "containerPort": 13133, "hostPort": 13133, "protocol": "tcp" }
+      ],
+      "essential": false,
+      "command": ["--config=env:AOT_CONFIG_CONTENT"],
+      "environment": [
+        {
+          "name": "AOT_CONFIG_CONTENT",
+          "value": "\"exporters\":\n  \"otlp\":\n    \"endpoint\": \"tempo.observability.internal:4317\"\n    \"tls\":\n      \"insecure\": true\n  \"prometheusremotewrite\":\n    \"add_metric_suffixes\": false\n    \"endpoint\": \"http://prometheus.observability.internal:9090/api/v1/write\"\n    \"external_labels\":\n      \"environment\": \"dev\"\n      \"product\": \"weddinggiftbox\"\n      \"service\": \"wgb-strapi\"\n    \"resource_to_telemetry_conversion\":\n      \"enabled\": true\n    \"tls\":\n      \"insecure\": true\n\"extensions\":\n  \"health_check\":\n    \"endpoint\": \"0.0.0.0:13133\"\n\"processors\":\n  \"batch\":\n    \"send_batch_size\": 1000\n    \"timeout\": \"5s\"\n  \"filter\":\n    \"metrics\":\n      \"exclude\":\n        \"match_type\": \"regexp\"\n        \"metric_names\":\n        - \"ecs_network.*\"\n        - \"container\\\\.network.*\"\n      \"include\":\n        \"match_type\": \"regexp\"\n        \"metric_names\":\n        - \"ecs_.*\"\n        - \"container_.*\"\n  \"memory_limiter\":\n    \"check_interval\": \"1s\"\n    \"limit_mib\": 128\n    \"spike_limit_mib\": 32\n  \"metricstransform\":\n    \"transforms\":\n    - \"action\": \"update\"\n      \"include\": \"ecs.task.cpu.utilized\"\n      \"new_name\": \"ecs_cpu_utilized\"\n    - \"action\": \"update\"\n      \"include\": \"ecs.task.cpu.reserved\"\n      \"new_name\": \"ecs_cpu_reserved\"\n    - \"action\": \"update\"\n      \"include\": \"ecs.task.memory.utilized\"\n      \"new_name\": \"ecs_memory_utilized_mb\"\n    - \"action\": \"update\"\n      \"include\": \"ecs.task.memory.reserved\"\n      \"new_name\": \"ecs_memory_reserved_mb\"\n    - \"action\": \"update\"\n      \"include\": \"ecs.task.memory.usage\"\n      \"new_name\": \"ecs_memory_usage_bytes\"\n    - \"action\": \"update\"\n      \"include\": \"container.cpu.utilized\"\n      \"new_name\": \"ecs_container_cpu_utilized\"\n    - \"action\": \"update\"\n      \"include\": \"container.cpu.reserved\"\n      \"new_name\": \"ecs_container_cpu_reserved\"\n    - \"action\": \"update\"\n      \"include\": \"container.memory.utilized\"\n      \"new_name\": \"ecs_container_memory_utilized_mb\"\n    - \"action\": \"update\"\n      \"include\": \"container.memory.reserved\"\n      \"new_name\": \"ecs_container_memory_reserved_mb\"\n    - \"action\": \"update\"\n      \"include\": \"container.memory.usage\"\n      \"new_name\": \"ecs_container_memory_usage_bytes\"\n  \"resource\":\n    \"attributes\":\n    - \"action\": \"upsert\"\n      \"key\": \"product\"\n      \"value\": \"weddinggiftbox\"\n    - \"action\": \"upsert\"\n      \"key\": \"environment\"\n      \"value\": \"dev\"\n    - \"action\": \"upsert\"\n      \"key\": \"service\"\n      \"value\": \"wgb-strapi\"\n\"receivers\":\n  \"awsecscontainermetrics\":\n    \"collection_interval\": \"30s\"\n  \"otlp\":\n    \"protocols\":\n      \"grpc\":\n        \"endpoint\": \"0.0.0.0:4317\"\n      \"http\":\n        \"endpoint\": \"0.0.0.0:4318\"\n\"service\":\n  \"extensions\":\n  - \"health_check\"\n  \"pipelines\":\n    \"metrics\":\n      \"exporters\":\n      - \"prometheusremotewrite\"\n      \"processors\":\n      - \"memory_limiter\"\n      - \"resource\"\n      - \"metricstransform\"\n      - \"filter\"\n      - \"batch\"\n      \"receivers\":\n      - \"otlp\"\n      - \"awsecscontainermetrics\"\n    \"traces\":\n      \"exporters\":\n      - \"otlp\"\n      \"processors\":\n      - \"memory_limiter\"\n      - \"resource\"\n      - \"batch\"\n      \"receivers\":\n      - \"otlp\"\n"
+        }
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/dev-wgb-strapi",
+          "awslogs-region": "ap-south-1",
+          "awslogs-stream-prefix": "otel"
+        }
+      },
+      "systemControls": []
     }
   ]
 }
