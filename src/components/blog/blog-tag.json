@@ -2,18 +2,24 @@
   "collectionName": "components_blog_blog_tags",
   "info": {
     "displayName": "Blog Tag",
-    "description": "PLACEHOLDER TAXONOMY — these six values were carried over verbatim from the shared weddingservices CMS and are Mandap's, not WeddingGiftBox's. Replace the enum with the real WGB tag list before any content is authored; changing an enum after entries reference it means a data migration."
+    "description": "WeddingGiftBox's topic tags. Derived from what the brand actually is — a physical box of premium voucher booklets sent to newly-fixed couples — and from the partner verticals named on the About Us page: jewellery, traditional and western wedding apparel, travel and hotels, electronics and appliances, and sweets. Tags are topics and repeat per post; `category` is the single section a post belongs to and is a separate field. This is an enumeration, so adding a value is free but renaming or removing one orphans every entry already using it — treat a change as a data migration once content exists."
   },
   "attributes": {
     "value": {
       "type": "enumeration",
       "enum": [
-        "Venues",
-        "Mandap Decor",
-        "Bridal Fashion",
-        "Groom Fashion",
-        "Wedding Inspiration",
-        "Trends"
+        "Wedding Planning",
+        "Wedding Budgeting",
+        "Wedding Shopping",
+        "Wedding Jewellery",
+        "Wedding Apparel",
+        "Home & Appliances",
+        "Honeymoon & Travel",
+        "Wedding Catering",
+        "Wedding Traditions",
+        "Gifting Ideas",
+        "Vouchers & Offers",
+        "Real Weddings"
       ],
       "required": true
     }

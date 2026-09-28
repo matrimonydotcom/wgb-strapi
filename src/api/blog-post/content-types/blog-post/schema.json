@@ -63,7 +63,8 @@
       }
     },
     "category": {
-      "type": "string",
+      "type": "enumeration",
+      "enum": ["Planning", "Shopping", "Gifting", "Offers", "Stories"],
       "required": true
     },
     "tags": {
