@@ -1,0 +1,32 @@
+# Secrets first — .env holds real credentials locally and must never reach a
+# layer. `.env.example` is the only one that ships, and only as documentation.
+.env
+.env.*
+!.env.example
+
+# Reinstalled in the image from package-lock.json; a host node_modules is the
+# wrong platform and would silently win over the one npm ci builds.
+node_modules
+
+# Build output. `npm run build` runs inside the image; copying a local build in
+# would ship whatever was last built on someone's laptop.
+build
+dist
+.strapi
+.tmp
+.cache
+
+# Local runtime only.
+docker/docker-compose.yml
+
+# Local disk uploads — a deployed environment writes to S3, and nobody’s laptop
+# uploads belong in a shared image. The directory itself still has to exist:
+# with AWS_BUCKET unset Strapi falls back to the local upload provider, which
+# refuses to boot without it. The runtime stage recreates it empty.
+public/uploads
+
+.git
+.github
+.gitignore
+*.log
+npm-debug.log*

@@ -1,0 +1,101 @@
+{
+  "family": "dev-wgb-strapi",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::${ACCOUNT_ID}:role/dev-wgb-strapi-ecs-exec-role",
+  "taskRoleArn": "arn:aws:iam::${ACCOUNT_ID}:role/dev-wgb-strapi-ecs-task-role",
+  "containerDefinitions": [
+    {
+      "name": "log_router",
+      "image": "${ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/dev-fluent-bit:3.2.2",
+      "cpu": 0,
+      "memoryReservation": 50,
+      "portMappings": [],
+      "essential": true,
+      "environment": [],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "user": "0",
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/dev-wgb-strapi",
+          "awslogs-region": "ap-south-1",
+          "awslogs-stream-prefix": "firelens"
+        }
+      },
+      "systemControls": [],
+      "firelensConfiguration": {
+        "type": "fluentbit",
+        "options": {
+          "enable-ecs-log-metadata": "true"
+        }
+      }
+    },
+    {
+      "name": "wgb-strapi",
+      "image": "REPLACED_AT_DEPLOY",
+      "cpu": 0,
+      "portMappings": [
+        {
+          "containerPort": 1337,
+          "hostPort": 1337,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "HOST", "value": "0.0.0.0" },
+        { "name": "PORT", "value": "1337" },
+
+        { "name": "PUBLIC_URL", "value": "REPLACE_ME__strapi_public_url" },
+        { "name": "ADMIN_PATH", "value": "/admin" },
+        { "name": "NEXTJS_WGB_ORIGIN", "value": "REPLACE_ME__storefront_origin" },
+
+        { "name": "STRAPI_TELEMETRY_DISABLED", "value": "true" },
+
+        { "name": "DATABASE_CLIENT", "value": "postgres" },
+        { "name": "DATABASE_HOST", "value": "REPLACE_ME__rds_endpoint" },
+        { "name": "DATABASE_PORT", "value": "5432" },
+        { "name": "DATABASE_NAME", "value": "weddinggiftbox" },
+        { "name": "DATABASE_USERNAME", "value": "strapi" },
+        { "name": "DATABASE_SCHEMA", "value": "strapi" },
+        { "name": "DATABASE_SSL", "value": "true" },
+        { "name": "DATABASE_SSL_REJECT_UNAUTHORIZED", "value": "false" },
+
+        { "name": "AWS_REGION", "value": "ap-south-1" },
+        { "name": "AWS_BUCKET", "value": "REPLACE_ME__uploads_bucket" },
+        { "name": "AWS_CDN_URL", "value": "REPLACE_ME__uploads_cdn_url" },
+        { "name": "AWS_UPLOAD_PATH", "value": "" }
+      ],
+      "secrets": [
+        { "name": "DATABASE_PASSWORD", "valueFrom": "${SECRET_ARN}:DATABASE_PASSWORD::" },
+        { "name": "APP_KEYS", "valueFrom": "${SECRET_ARN}:APP_KEYS::" },
+        { "name": "API_TOKEN_SALT", "valueFrom": "${SECRET_ARN}:API_TOKEN_SALT::" },
+        { "name": "ADMIN_JWT_SECRET", "valueFrom": "${SECRET_ARN}:ADMIN_JWT_SECRET::" },
+        { "name": "TRANSFER_TOKEN_SALT", "valueFrom": "${SECRET_ARN}:TRANSFER_TOKEN_SALT::" },
+        { "name": "JWT_SECRET", "valueFrom": "${SECRET_ARN}:JWT_SECRET::" },
+        { "name": "ENCRYPTION_KEY", "valueFrom": "${SECRET_ARN}:ENCRYPTION_KEY::" },
+        { "name": "PREVIEW_SECRET", "valueFrom": "${SECRET_ARN}:PREVIEW_SECRET::" }
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "systemControls": [],
+      "logConfiguration": {
+        "logDriver": "awsfirelens",
+        "options": {
+          "Host": "loki.observability.internal",
+          "line_format": "json",
+          "Name": "loki",
+          "Port": "3100",
+          "labels": "job=wgb-strapi, product=weddinggiftbox, environment=dev, service=wgb-strapi"
+        }
+      }
+    }
+  ]
+}
