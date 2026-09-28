@@ -165,11 +165,14 @@ jobs:
       - name: Show deploy info
         run: |
           echo "## Dev Deploy" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit:** \`${{ steps.tag.outputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image tag (ECR):** \`${{ steps.tag.outputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Cluster:** \`${{ env.ECS_CLUSTER }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Service:** \`${{ env.ECS_SERVICE }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Promote to Prod" >> $GITHUB_STEP_SUMMARY
           echo "[**Deploy this commit to prod →**](https://github.com/${{ github.repository }}/actions/workflows/deploy-prod.yml)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Click the link above, then **Run workflow** with ref: \`${{ steps.tag.outputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          # Full 40-char SHA, not the short image tag above — actions/checkout
+          # can fetch a branch/tag or a full SHA, but not an abbreviated one;
+          # git fetch-by-SHA only resolves full hashes remotely.
+          echo "Click the link above, then **Run workflow** with ref: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
