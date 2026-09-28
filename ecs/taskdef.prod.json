@@ -60,7 +60,7 @@
         { "name": "STRAPI_TELEMETRY_DISABLED", "value": "true" },
 
         { "name": "DATABASE_CLIENT", "value": "postgres" },
-        { "name": "DATABASE_HOST", "value": "REPLACE_ME__rds_endpoint" },
+        { "name": "DATABASE_HOST", "value": "wgb-postgres.cvkqay4gs0b7.ap-south-1.rds.amazonaws.com" },
         { "name": "DATABASE_PORT", "value": "5432" },
         { "name": "DATABASE_NAME", "value": "weddinggiftbox" },
         { "name": "DATABASE_USERNAME", "value": "strapi" },

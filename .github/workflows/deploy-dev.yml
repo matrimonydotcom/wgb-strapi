@@ -164,6 +164,12 @@ jobs:
 
       - name: Show deploy info
         run: |
-          echo "image tag : ${{ steps.tag.outputs.image_tag }}"
-          echo "cluster   : ${{ env.ECS_CLUSTER }}"
-          echo "service   : ${{ env.ECS_SERVICE }}"
+          echo "## Dev Deploy" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** \`${{ steps.tag.outputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Cluster:** \`${{ env.ECS_CLUSTER }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service:** \`${{ env.ECS_SERVICE }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Promote to Prod" >> $GITHUB_STEP_SUMMARY
+          echo "[**Deploy this commit to prod →**](https://github.com/${{ github.repository }}/actions/workflows/deploy-prod.yml)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Click the link above, then **Run workflow** with ref: \`${{ steps.tag.outputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
