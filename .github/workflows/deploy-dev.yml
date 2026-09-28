@@ -71,6 +71,11 @@ jobs:
   deploy:
     name: Build and deploy to dev
     runs-on: ubuntu-latest
+    # Required for vars.AWS_ACCOUNT_ID / any environment-scoped secret to be
+    # visible to this job — without this, GitHub never scopes the job to the
+    # "development" environment and those variables resolve empty, producing
+    # a malformed role-to-assume ARN ("Request ARN is invalid").
+    environment: development
 
     steps:
       - uses: actions/checkout@v4
