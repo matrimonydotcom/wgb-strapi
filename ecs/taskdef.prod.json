@@ -63,7 +63,7 @@
         { "name": "DATABASE_HOST", "value": "wgb-postgres.cvkqay4gs0b7.ap-south-1.rds.amazonaws.com" },
         { "name": "DATABASE_PORT", "value": "5432" },
         { "name": "DATABASE_NAME", "value": "weddinggiftbox" },
-        { "name": "DATABASE_USERNAME", "value": "strapi" },
+        { "name": "DATABASE_USERNAME", "value": "wgbadmin" },
         { "name": "DATABASE_SCHEMA", "value": "strapi" },
         { "name": "DATABASE_SSL", "value": "true" },
         { "name": "DATABASE_SSL_REJECT_UNAUTHORIZED", "value": "false" },

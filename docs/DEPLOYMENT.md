@@ -127,28 +127,30 @@ mint its tokens.
    a dedicated `wgb-strapi/uploads/` prefix so object keys don't collide with
    `wgb-backend`'s.
 3. **Super-admin email(s)** for the first admin user — still open.
-4. **The database — decided, and now half-built.** The dev RDS already exists
-   and already serves `wgb-backend`: instance `wgb-postgres`, database
+4. **The database — decided and built.** The dev RDS already exists and
+   already serves `wgb-backend`: instance `wgb-postgres`, database
    `weddinggiftbox`, master user `wgbadmin`
-   (`environments/dev-wgb/terraform.tfvars`). Strapi reuses the same instance
-   and the same database, with its own schema and its own role exactly as
-   below — this SQL still needs to be (re-)run:
+   (`environments/dev-wgb/terraform.tfvars`). Strapi reuses the same
+   instance, the same database, and **the same master user** as
+   `wgb-backend` — explicit product decision: one set of DB credentials to
+   manage/rotate across both services, rather than a dedicated per-service
+   role. Only the schema is Strapi's own:
 
    ```sql
-   CREATE ROLE strapi LOGIN PASSWORD '<generated>';
-   CREATE SCHEMA strapi AUTHORIZATION strapi;
+   CREATE SCHEMA IF NOT EXISTS strapi AUTHORIZATION wgbadmin;
    ```
 
-   **Status:** the `strapi` schema was bootstrapped once already, but granted
-   to `wgbadmin` rather than a dedicated role — before this design was known.
-   That needs redoing: reassign the schema to a freshly-created `strapi` role
-   (`ALTER SCHEMA strapi OWNER TO strapi` after creating the role, or drop and
-   recreate — no tables exist yet) and put that role's password into
-   `wgb-dev-wgb-strapi-secrets` as `DATABASE_PASSWORD` instead of the RDS
-   master password. Not done by Terraform or the workflow — bastion + `psql`,
-   same as the original bootstrap.
+   (An earlier iteration of this bootstrapped a dedicated `strapi` role
+   instead — reverted after 51 tables had already been created under it;
+   ownership was transferred back to `wgbadmin` via `REASSIGN OWNED BY
+   strapi TO wgbadmin` before dropping that role, so nothing Strapi had
+   already written was lost.)
 
-   `DATABASE_HOST` is now filled in:
+   `DATABASE_USERNAME` is `wgbadmin` and `DATABASE_PASSWORD` (in
+   `wgb-dev-wgb-strapi-secrets`) is wgbadmin's actual RDS master password —
+   same value `wgb-backend`'s own `DATABASE_URL` embeds.
+
+   `DATABASE_HOST` is filled in:
    `wgb-postgres.ctvheqmsdec6.ap-south-1.rds.amazonaws.com`.
 
    Worth raising: the instance is **`db.t4g.micro`** — 2 burstable vCPU, 1 GiB
